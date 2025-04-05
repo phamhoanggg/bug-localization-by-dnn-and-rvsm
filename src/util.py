@@ -18,6 +18,7 @@ from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+from  assets import  stop_words
 
 def git_clone(repo_url, clone_folder):
     """ Clones the git repo from 'repo_ur' into 'clone_folder'
@@ -58,6 +59,8 @@ def tsv2dict(tsv_path):
         line["report_time"] = datetime.strptime(
             line["report_time"], "%Y-%m-%d %H:%M:%S"
         )
+        # print("Line: ", line)
+        # break
 
         dict_list.append(line)
     return dict_list
@@ -104,7 +107,8 @@ def top_k_wrong_files(right_files, br_raw_text, java_files, k=50):
     """
 
     # Randomly sample 2*k files
-    randomly_sampled = random.sample(set(java_files.keys()) - set(right_files), 2 * k)
+    #randomly_sampled = random.sample(set(java_files.keys()) - set(right_files), 2 * k)
+    randomly_sampled = random.sample(list(set(java_files.keys()) - set(right_files)), 2 * k)
 
     all_files = []
     for filename in randomly_sampled:
@@ -158,7 +162,7 @@ def cosine_sim(text1, text2):
         text1 {string} -- first text
         text2 {string} -- second text
     """
-    vectorizer = TfidfVectorizer(tokenizer=normalize, min_df=1, stop_words="english")
+    vectorizer = TfidfVectorizer(tokenizer=normalize, token_pattern=None, min_df=1, stop_words=list(stop_words))
     tfidf = vectorizer.fit_transform([text1, text2])
     sim = ((tfidf * tfidf.T).toarray())[0, 1]
 
@@ -349,14 +353,12 @@ def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
         relevancy_list = []
         if clf:  # dnn classifier
             relevancy_list = clf.predict(dnn_input)
-            print("Relevency list count: ", len(relevancy_list))
         else:  # rvsm
             relevancy_list = np.array(dnn_input).ravel()
 
         # Top-1, top-2 ... top-20 accuracy
         for i in range(1, 21):
             #i = min(i, len(relevancy_list))  # Giới hạn k trong khoảng hợp lệ
-            print("i: ", i)
             max_indices = np.argpartition(relevancy_list, -i)[-i:]
             for corresponding_file in np.array(corresponding_files)[max_indices]:
                 if str(corresponding_file) in br2files_dict[bug_id]:

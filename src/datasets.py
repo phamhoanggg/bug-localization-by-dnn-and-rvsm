@@ -45,19 +45,19 @@ swt = Dataset(
 
 tomcat = Dataset(
     'tomcat',
-    _DATASET_ROOT / 'tomcat-7.0.51/',
+    _DATASET_ROOT / 'tomcat/',
     _DATASET_ROOT / 'Tomcat.txt',
     "https://github.com/apache/tomcat.git",
-    _DATASET_ROOT / 'tomcat',
+    _DATASET_ROOT / 'tomcat/java',
     _DATASET_ROOT / 'features_tomcat.csv/'
 )
 
 tomcat1 = Dataset(
     'tomcat',
-    _DATASET_ROOT / 'tomcat-7.0.51/',
+    _DATASET_ROOT / 'tomcat/java/',
     _DATASET_ROOT / 'Tomcat.txt',
     "https://github.com/apache/tomcat.git",
-    _DATASET_ROOT / 'tomcat',
+    _DATASET_ROOT / 'tomcat/java',
     _DATASET_ROOT / 'features_tomcat1.csv'
 )
 

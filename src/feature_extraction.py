@@ -61,7 +61,7 @@ def extract(i, br, bug_reports, java_src_dict):
                     br_files, br_raw_text, java_src_dict
             ):
                 features.append([br_id, java_file, rvsm, cfs, cns, bfr, bff, 0])
-        except:
+        except Exception as e:
             pass
 
 
@@ -83,6 +83,7 @@ def extract_features(repo_url, clone_folder, bug_report_text, src_code_folder, f
     # Read all java source files
     java_src_dict = get_all_source_code(src_code_folder)
     print("Number of java files: ", len(java_src_dict))
+    print("N_jobs: ", cpu_count() - 1)
     # Use all CPUs except one to speed up extraction and avoid computer lagging
     batches = Parallel(n_jobs=cpu_count() - 1)(
         delayed(extract)(i, br, bug_reports, java_src_dict)

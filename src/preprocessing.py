@@ -18,7 +18,7 @@ import csv
 from collections import OrderedDict
 from pygments.lexers import JavaLexer
 from pygments.token import Token
-from datasets import DATASET
+from datasets import DATASET, _DATASET_ROOT
 from datetime import datetime
 
 class BugReport:
@@ -419,7 +419,6 @@ class SrcPreprocessing:
             src.file_name = dict(zip(['stemmed', 'unstemmed'], [[stemmer.stem(token) for token in src.file_name], src.file_name]))
             src.pos_tagged_comments = dict(zip(['stemmed', 'unstemmed'], [[stemmer.stem(token) for token in src.pos_tagged_comments], src.pos_tagged_comments]))
 
-
     def preprocess(self):
         self.pos_tagging()
         self.tokenize()
@@ -431,15 +430,17 @@ class SrcPreprocessing:
 
 def main():
     parser = Parser(DATASET)
-    # src_prep = SrcPreprocessing(parser.src_parser())
-    # src_prep.preprocess()
-    # src_strings = src_prep.src_files
-    # print(src_strings)
+
+    src_prep = SrcPreprocessing(parser.src_parser())
+    src_prep.preprocess()
+    with open(_DATASET_ROOT / 'preprocessed_src.pickle', 'wb') as file:
+        pickle.dump(src_prep.src_files, file, protocol=pickle.HIGHEST_PROTOCOL)
+
     report_prep = ReportPreprocessing(parser.report_parser())
     report_prep.preprocess()
-    report_strings = report_prep.bug_reports
-    print(report_strings)
-
+    with open(_DATASET_ROOT / 'preprocessed_reports.pickle', 'wb') as file:
+        pickle.dump(report_prep.bug_reports, file,
+                    protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__ == '__main__':
     main()
