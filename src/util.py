@@ -39,28 +39,66 @@ def git_clone(repo_url, clone_folder):
     os.chdir(cwd)
 
 
+# def tsv2dict(tsv_path):
+#     """ Converts a tab separated values (tsv) file into a list of dictionaries
+
+#     Arguments:
+#         tsv_path {string} -- path of the tsv file
+#     """
+#     reader = csv.DictReader(open(tsv_path, "r"), delimiter="\t")
+#     dict_list = []
+#     for line in reader:
+#         line["files"] = [
+#             os.path.normpath(f[0:])
+#             for f in line["files"].strip().split()
+#             if (f.startswith("java/") or f.startswith("modules/") or f.startswith("test/")) and f.endswith(".java")
+#         ]
+#         line["raw_text"] = line["summary"] + line["description"]
+#         # line["summary"] = clean_and_split(line["summary"][11:])
+#         # line["description"] = clean_and_split(line["description"])
+#         line["report_time"] = datetime.strptime(
+#             line["report_time"], "%Y-%m-%d %H:%M:%S"
+#         )
+#         # print("Line: ", line)
+#         # break
+
+#         dict_list.append(line)
+#     return dict_list
+
 def tsv2dict(tsv_path):
     """ Converts a tab separated values (tsv) file into a list of dictionaries
 
     Arguments:
         tsv_path {string} -- path of the tsv file
     """
-    reader = csv.DictReader(open(tsv_path, "r"), delimiter="\t")
+    reader = csv.DictReader(open(tsv_path, "r"), delimiter=",")
     dict_list = []
-    for line in reader:
+    for idx, line in enumerate(reader):
+        # print(f"line1 : {line}")
+        # line["files"] = [
+        #     os.path.normpath(f[0:])
+        #     for f in line["files"].strip().split()
+        #     if (f.startswith("java/") or f.startswith("modules/") or f.startswith("webapps/") or f.startswith(
+        #         "res/") or f.startswith("test/")) and f.endswith(".java")
+        # ]
+        line["id"] = str(idx)
         line["files"] = [
-            os.path.normpath(f[0:])
-            for f in line["files"].strip().split()
-            if (f.startswith("java/") or f.startswith("modules/") or f.startswith("test/")) and f.endswith(".java")
+            os.path.normpath(f.strip()).replace("\\", "/")
+            for f in line["fixed_files"].split(";")
+            if (
+                    f.strip().replace("\\", "/").startswith(("java/"))
+                    and f.strip().endswith(".java")
+            )
         ]
-        line["raw_text"] = line["summary"] + line["description"]
+        # line["raw_text"] = line["summary"] + line["description"]
+        summary_dict = json.loads(line["summary"].replace("'", '"'))
+        description_dict = json.loads(line["description"].replace("'", '"'))
+        line["raw_text"] = " ".join(summary_dict["stemmed"]) + " " + " ".join(description_dict["stemmed"])
         # line["summary"] = clean_and_split(line["summary"][11:])
         # line["description"] = clean_and_split(line["description"])
         line["report_time"] = datetime.strptime(
             line["report_time"], "%Y-%m-%d %H:%M:%S"
         )
-        # print("Line: ", line)
-        # break
 
         dict_list.append(line)
     return dict_list
