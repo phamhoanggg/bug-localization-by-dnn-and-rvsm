@@ -267,20 +267,81 @@ def collaborative_filtering_score(raw_text, prev_reports):
     return cfs
 
 
-def class_name_similarity(raw_text, source_code):
-    """[summary]
+def class_name_similarity(br_id, java_file):
+    """Tính độ tương đồng giữa báo cáo lỗi và tên lớp trong tệp mã nguồn.
 
     Arguments:
-        raw_text {string} -- raw text of the bug report 
-        source_code {string} -- java source code 
+        br_id {string} -- ID của báo cáo lỗi (bug report ID).
+        java_file {string} -- Đường dẫn đến tệp mã nguồn (đã được chuẩn hóa bằng os.path.normpath).
+
+    Returns:
+        float -- Độ tương đồng giữa báo cáo lỗi và tên lớp.
     """
-    classes = source_code.split(" class ")[1:]
-    class_names = [c[: c.find(" ")] for c in classes]
-    class_names_text = " ".join(class_names)
+    # Lấy báo cáo lỗi từ preprocessed_reports
+    if br_id not in preprocessed_reports:
+        return 0.0
+    bug_report = preprocessed_reports[br_id]
 
-    class_name_sim = cosine_sim(raw_text, class_names_text)
+    # Lấy tệp mã nguồn từ preprocessed_src
+    if java_file not in preprocessed_src:
+        return 0.0
+    src_file = preprocessed_src[java_file]
 
-    return class_name_sim
+    # Kiểm tra và lấy danh sách tên lớp (stemmed) từ tệp mã nguồn
+    class_names_stemmed = []
+    if isinstance(src_file.get("class_names"), dict):
+        class_names_stemmed = src_file["class_names"].get("stemmed", [])
+    if not class_names_stemmed:
+        return 0.0
+
+    # Thêm exact_file_name vào danh sách tên lớp (nếu có)
+    exact_file_name_stemmed = []
+    if isinstance(src_file.get("exact_file_name"), dict):
+        exact_file_name_stemmed = src_file["exact_file_name"].get("stemmed", [])
+    if isinstance(exact_file_name_stemmed, list):
+        class_names_stemmed.extend(exact_file_name_stemmed)
+    else:
+        class_names_stemmed.append(exact_file_name_stemmed)
+
+    # Lấy văn bản từ báo cáo lỗi (sử dụng pos_tagged để tập trung vào danh từ và động từ)
+    br_summary_stemmed = bug_report.get("pos_tagged_summary", {}).get("stemmed", [])
+    br_description_stemmed = bug_report.get("pos_tagged_description", {}).get("stemmed", [])
+    br_tokens = br_summary_stemmed + br_description_stemmed
+    if not br_tokens:
+        return 0.0
+
+    # Trích xuất tên lớp từ stack traces (nếu có)
+    stack_trace_classes = []
+    if bug_report.get("stack_traces"):
+        for trace in bug_report["stack_traces"]:
+            # trace có dạng (class_name.method_name, file_info)
+            class_part = trace[0]  # Ví dụ: com.example.MyClass.methodName
+            class_name = class_part[:class_part.rfind('.')]  # Lấy phần class: com.example.MyClass
+            class_name = class_name[class_name.rfind('.') + 1:]  # Lấy tên lớp: MyClass
+            # Stem tên lớp để so sánh
+            stemmer = PorterStemmer()
+            class_name_stemmed = stemmer.stem(class_name.lower())
+            stack_trace_classes.append(class_name_stemmed)
+
+    # Phương pháp 1: Tính độ tương đồng trực tiếp (direct matching) với class_names
+    match_count = sum(1 for class_name in class_names_stemmed if class_name in br_tokens)
+    direct_similarity = match_count / len(class_names_stemmed) if class_names_stemmed else 0.0
+
+    # Phương pháp 2: Tính độ tương đồng trực tiếp với stack traces
+    stack_trace_similarity = 0.0
+    if stack_trace_classes:
+        stack_match_count = sum(1 for class_name in class_names_stemmed if class_name in stack_trace_classes)
+        stack_trace_similarity = stack_match_count / len(class_names_stemmed) if class_names_stemmed else 0.0
+
+    # Phương pháp 3: Tính độ tương đồng cosine
+    class_names_text = " ".join(class_names_stemmed)
+    br_text = " ".join(br_tokens)
+    cosine_similarity = cosine_sim(br_text, class_names_text)
+
+    # Kết hợp ba độ tương đồng (có thể điều chỉnh trọng số)
+    final_similarity = 0.4 * direct_similarity + 0.4 * stack_trace_similarity + 0.2 * cosine_similarity
+
+    return final_similarity
 
 
 def helper_collections(samples, text_file_path, only_rvsm=False):
@@ -392,3 +453,28 @@ class CodeTimer:
     def __exit__(self, exc_type, exc_value, traceback):
         self.took = timeit.default_timer() - self.start
         print("Finished in {0:0.5f} secs.".format(self.took))
+
+
+if __name__ == "__main__":
+    # Mock data for preprocessed_reports
+    preprocessed_reports = {
+        "BR1": {
+            "pos_tagged_summary": {"stemmed": ["bug", "fix", "error"], "unstemmed": ["bug", "fix", "error"]},
+            "pos_tagged_description": {"stemmed": ["method", "fail", "execut"], "unstemmed": ["method", "failed", "execution"]},
+            "stack_traces": [("com.example.MyClass.methodName", "MyClass.java")],
+        }
+    }
+
+    # Mock data for preprocessed_src
+    preprocessed_src = {
+        "MyClass.java": {
+            "class_names": {"stemmed": ["myclass"], "unstemmed": ["MyClass"]},
+            "exact_file_name": {"stemmed": ["myclass"], "unstemmed": ["MyClass"]},
+        }
+    }
+
+    # Test the function
+    br_id = "BR1"
+    java_file = "MyClass.java"
+    similarity = class_name_similarity(br_id, java_file)
+    print(f"Class name similarity for bug report '{br_id}' and file '{java_file}': {similarity}")
