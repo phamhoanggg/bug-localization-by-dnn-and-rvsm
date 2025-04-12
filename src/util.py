@@ -55,21 +55,18 @@ def csv2dict_for_br(br_path):
             os.path.normpath(f.strip()).replace("\\", "/")
             for f in line["fixed_files"].split(";")
             if (
-                    f.strip().replace("\\", "/").startswith("java/")
-                    or f.strip().replace("\\", "/").startswith("modules/")
-                    or f.strip().replace("\\", "/").startswith("test/")
-                    or f.strip().replace("\\", "/").startswith("webapps/")
-                    # f.strip().replace("\\", "/").startswith("ajde/")
-                    # or f.strip().replace("\\", "/").startswith("ajde.core/")
-                    # or f.strip().replace("\\", "/").startswith("ajdoc/")
-                    # or f.strip().replace("\\", "/").startswith("asm/")
-                    # or f.strip().replace("\\", "/").startswith("bcel-builder/")
-                    # or f.strip().replace("\\", "/").startswith("bridge/")
-                    # or f.strip().replace("\\", "/").startswith("loadtime/")
-                    # or f.strip().replace("\\", "/").startswith("org.aspectj.ajdt.core/")
-                    # or f.strip().replace("\\", "/").startswith("org.aspectj.matcher/")
-                    # or f.strip().replace("\\", "/").startswith("tests/")
-                    # or f.strip().replace("\\", "/").startswith("weaver/")
+                    (f.strip().replace("\\", "/").startswith("org.aspectj.ajdt.core/")
+                    or f.strip().replace("\\", "/").startswith("tests/")
+                    or f.strip().replace("\\", "/").startswith("loadtime/")
+                    or f.strip().replace("\\", "/").startswith("weaver/")
+                    or f.strip().replace("\\", "/").startswith("build/")
+                    or f.strip().replace("\\", "/").startswith("util/")
+                    or f.strip().replace("\\", "/").startswith("bridge/")
+                    or f.strip().replace("\\", "/").startswith("taskdefs/")
+                    or f.strip().replace("\\", "/").startswith("weaver5/")
+                    or f.strip().replace("\\", "/").startswith("asm/")
+                    or f.strip().replace("\\", "/").startswith("org.aspectj.ajdt.core/")
+                    or f.strip().replace("\\", "/").startswith("org.aspectj.matcher/"))
                     and f.strip().endswith(".java")
             )
         ]
@@ -402,19 +399,23 @@ def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
             relevancy_list = clf.predict(dnn_input)
         else:  # rvsm
             relevancy_list = np.array(dnn_input).ravel()
-
+            
         # Find rank of first correct file
         correct_files = br2files_dict[bug_id]
         found_rank = float('inf')
         
-        for i, file in enumerate(corresponding_files):
+        # Sort files by relevancy in descending order
+        sorted_indices = np.argsort(relevancy_list)[::-1]  # Indices of files sorted by relevancy
+        sorted_files = np.array(corresponding_files)[sorted_indices]
+        
+        for i, file in enumerate(sorted_files):
             if str(file) in correct_files:
                 found_rank = i + 1  # Convert to 1-based indexing
                 break
                 
         if found_rank != float('inf'):
             ranks.append(found_rank)
-
+            
         # Top-1, top-2 ... top-20 accuracy
         for i in range(1, 21):
             max_indices = np.argpartition(relevancy_list, -i)[-i:]
@@ -427,7 +428,7 @@ def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
     for i, counter in enumerate(topk_counters):
         acc = counter / (len(test_bug_reports) - negative_total)
         acc_dict[i + 1] = round(acc, 3)
-
+        
     # Calculate MRR and MAP for k=20
     accuracy, mrr, map_score = mrr_map(ranks, 20)
     acc_dict['mrr'] = round(mrr, 3)
@@ -461,7 +462,6 @@ def mrr_map(ranks, k):
     map_score = map_sum / total_reports
 
     return accuracy, mrr, map_score
-
 
 class CodeTimer:
     """ Keeps time from the initalization, and print the elapsed time at the end.
