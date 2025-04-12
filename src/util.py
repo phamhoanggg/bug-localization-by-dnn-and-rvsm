@@ -1,11 +1,6 @@
-""" 
-Helper functions mostly for feature extraction.
-
-Used many modified and intact code blocks from 
-'https://github.com/jeffrey-palmerino/BugLocalizationDNN'
-"""
-
 import csv
+import json
+import pickle
 import re
 import os
 import random
@@ -17,27 +12,9 @@ from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
+from preprocessing import SourceFile
 
 from  assets import  stop_words
-
-def git_clone(repo_url, clone_folder):
-    """ Clones the git repo from 'repo_ur' into 'clone_folder'
-
-    Arguments:
-        repo_url {string} -- Url of git repository
-        clone_folder {string} -- path of a local folder to clone the repository 
-    """
-    repo_name = repo_url[repo_url.rfind("/") + 1 : -4]
-    if os.path.isdir(clone_folder + repo_name):
-        print("Already cloned")
-        return
-    cwd = os.getcwd()
-    if not os.path.isdir(clone_folder):
-        os.mkdir(clone_folder)
-    os.chdir(clone_folder)
-    os.system("git clone {}".format(repo_url))
-    os.chdir(cwd)
-
 
 # def tsv2dict(tsv_path):
 #     """ Converts a tab separated values (tsv) file into a list of dictionaries
@@ -65,37 +42,40 @@ def git_clone(repo_url, clone_folder):
 #         dict_list.append(line)
 #     return dict_list
 
-def tsv2dict(tsv_path):
+def csv2dict_for_br(br_path):
     """ Converts a tab separated values (tsv) file into a list of dictionaries
 
     Arguments:
         tsv_path {string} -- path of the tsv file
     """
-    reader = csv.DictReader(open(tsv_path, "r"), delimiter=",")
+    reader = csv.DictReader(open(br_path, "r"), delimiter=",")
     dict_list = []
-    for idx, line in enumerate(reader):
-        # print(f"line1 : {line}")
-        # line["files"] = [
-        #     os.path.normpath(f[0:])
-        #     for f in line["files"].strip().split()
-        #     if (f.startswith("java/") or f.startswith("modules/") or f.startswith("webapps/") or f.startswith(
-        #         "res/") or f.startswith("test/")) and f.endswith(".java")
-        # ]
-        line["id"] = str(idx)
+    for line in reader:
         line["files"] = [
             os.path.normpath(f.strip()).replace("\\", "/")
             for f in line["fixed_files"].split(";")
             if (
-                    f.strip().replace("\\", "/").startswith(("java/"))
+                    f.strip().replace("\\", "/").startswith("java/")
+                    or f.strip().replace("\\", "/").startswith("modules/")
+                    or f.strip().replace("\\", "/").startswith("test/")
+                    or f.strip().replace("\\", "/").startswith("webapps/")
+                    # f.strip().replace("\\", "/").startswith("ajde/")
+                    # or f.strip().replace("\\", "/").startswith("ajde.core/")
+                    # or f.strip().replace("\\", "/").startswith("ajdoc/")
+                    # or f.strip().replace("\\", "/").startswith("asm/")
+                    # or f.strip().replace("\\", "/").startswith("bcel-builder/")
+                    # or f.strip().replace("\\", "/").startswith("bridge/")
+                    # or f.strip().replace("\\", "/").startswith("loadtime/")
+                    # or f.strip().replace("\\", "/").startswith("org.aspectj.ajdt.core/")
+                    # or f.strip().replace("\\", "/").startswith("org.aspectj.matcher/")
+                    # or f.strip().replace("\\", "/").startswith("tests/")
+                    # or f.strip().replace("\\", "/").startswith("weaver/")
                     and f.strip().endswith(".java")
             )
         ]
-        # line["raw_text"] = line["summary"] + line["description"]
         summary_dict = json.loads(line["summary"].replace("'", '"'))
         description_dict = json.loads(line["description"].replace("'", '"'))
         line["raw_text"] = " ".join(summary_dict["stemmed"]) + " " + " ".join(description_dict["stemmed"])
-        # line["summary"] = clean_and_split(line["summary"][11:])
-        # line["description"] = clean_and_split(line["description"])
         line["report_time"] = datetime.strptime(
             line["report_time"], "%Y-%m-%d %H:%M:%S"
         )
@@ -118,6 +98,15 @@ def csv2dict(csv_path):
 
     return csv_dict
 
+def pickle2dict(pickle_path):
+    """ Converts a pickle file into a dictionary
+
+    Arguments:
+        pickle_path {string} -- path to pickle file
+    """
+    with open(pickle_path, "rb") as f:
+        data = pickle.load(f)
+    return data
 
 def clean_and_split(text):
     """ Remove all punctuation and split text strings into lists of words
@@ -149,16 +138,24 @@ def top_k_wrong_files(right_files, br_raw_text, java_files, k=50):
     randomly_sampled = random.sample(list(set(java_files.keys()) - set(right_files)), 2 * k)
 
     all_files = []
+
     for filename in randomly_sampled:
-        try:
-            src = java_files[filename]
+        src = java_files[filename]
 
-            rvsm = cosine_sim(br_raw_text, src)
-            cns = class_name_similarity(br_raw_text, src)
+        src_text = ' '.join(src.all_content["stemmed"])
+        rvsm = cosine_sim(br_raw_text, src_text)
+        cns = class_name_similarity(br_raw_text, src)
 
-            all_files.append((filename, rvsm, cns))
-        except:
-            pass
+        all_files.append((filename, rvsm, cns))
+        # try:
+        #     src = java_files[filename]
+        #
+        #     rvsm = cosine_sim(br_raw_text, src)
+        #     cns = class_name_similarity(br_raw_text, src)
+        #
+        #     all_files.append((filename, rvsm, cns))
+        # except:
+        #     pass
 
     top_k_files = sorted(all_files, key=lambda x: x[1], reverse=True)[:k]
 
@@ -264,6 +261,7 @@ def previous_reports(filename, until, bug_reports):
         until {datetime} -- until date
         bug_reports {list of dictionaries} -- list of all bug reports
     """
+    filename = filename.replace("\\", "/")
     return [
         br
         for br in bug_reports
@@ -300,28 +298,30 @@ def collaborative_filtering_score(raw_text, prev_reports):
     for report in prev_reports:
         prev_reports_merged_raw_text += report["raw_text"]
 
-    cfs = cosine_sim(raw_text, prev_reports_merged_raw_text)
 
+    cfs = cosine_sim(raw_text, prev_reports_merged_raw_text)
+    # print("Raw text: ", raw_text)
+    # print("Prev reports merged raw text: ", prev_reports_merged_raw_text)
+    # print("CFS: ", cfs)
     return cfs
 
 
-def class_name_similarity(raw_text, source_code):
+def class_name_similarity(raw_text, source_line):
     """[summary]
 
     Arguments:
         raw_text {string} -- raw text of the bug report 
-        source_code {string} -- java source code 
+        source_line {string} -- line in src_file.csv
     """
-    classes = source_code.split(" class ")[1:]
-    class_names = [c[: c.find(" ")] for c in classes]
-    class_names_text = " ".join(class_names)
+    classname_dict = source_line.class_names
+    class_names_text = ' '.join(classname_dict['stemmed'])
 
     class_name_sim = cosine_sim(raw_text, class_names_text)
 
     return class_name_sim
 
 
-def helper_collections(samples, text_file_path, only_rvsm=False):
+def helper_collections(samples, bug_report_csv, only_rvsm=False):
     """ Generates helper function for calculations
     
     Arguments:
@@ -331,35 +331,35 @@ def helper_collections(samples, text_file_path, only_rvsm=False):
         only_rvsm {bool} -- If True only 'rvsm' features are added to 'sample_dict'. (default: {False})
     """
     sample_dict = {}
-    for s in samples:
-        sample_dict[s["report_id"]] = []
+    for feature_row in samples:
+        sample_dict[feature_row["report_id"]] = []
 
-    for s in samples:
+    for feature_row in samples:
         temp_dict = {}
 
-        values = [float(s["rVSM_similarity"])]
+        values = [float(feature_row["rVSM_similarity"])]
         if not only_rvsm:
             values += [
-                float(s["collab_filter"]),
-                float(s["classname_similarity"]),
-                float(s["bug_recency"]),
-                float(s["bug_frequency"]),
+                float(feature_row["collab_filter"]),
+                float(feature_row["classname_similarity"]),
+                float(feature_row["bug_recency"]),
+                float(feature_row["bug_frequency"]),
             ]
-        temp_dict[os.path.normpath(s["file"])] = values
+        temp_dict[os.path.normpath(feature_row["file"])] = values
 
-        sample_dict[s["report_id"]].append(temp_dict)
+        sample_dict[feature_row["report_id"]].append(temp_dict)
 
-    bug_reports = tsv2dict(text_file_path)
+    bug_reports = csv2dict(bug_report_csv)
     br2files_dict = {}
 
     for bug_report in bug_reports:
-        br2files_dict[bug_report["id"]] = bug_report["files"]
+        br2files_dict[bug_report['id']] = bug_report["fixed_files"]
 
     return sample_dict, bug_reports, br2files_dict
 
 
 def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
-    """ Calculates top-k accuracies
+    """ Calculates top-k accuracies and returns ranks for MRR/MAP calculation
     
     Arguments:
         test_bug_reports {list of dictionaries} -- list of all bug reports
@@ -371,6 +371,8 @@ def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
     """
     topk_counters = [0] * 20
     negative_total = 0
+    ranks = []  # Store ranks for MRR/MAP calculation
+
     for bug_report in test_bug_reports:
         dnn_input = []
         corresponding_files = []
@@ -382,21 +384,39 @@ def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
                 features_for_java_file = list(temp_dict.values())[0]
                 dnn_input.append(features_for_java_file)
                 corresponding_files.append(java_file)
-        except:
+        except Exception as e:
+            print("Error: ", e)
             negative_total += 1
             continue
 
-        # Calculate relevancy for all files related to the bug report in features_eclipse_base.csv
-        # Remember that, in features_eclipse_base.csv, there are 50 wrong(randomly chosen) files for each right(buggy)
+        # for temp_dict in sample_dict[bug_id]:
+        #     java_file = list(temp_dict.keys())[0]
+        #     features_for_java_file = list(temp_dict.values())[0]
+        #     dnn_input.append(features_for_java_file)
+        #     corresponding_files.append(java_file)
+
+
+        # Calculate relevancy for all files
         relevancy_list = []
         if clf:  # dnn classifier
             relevancy_list = clf.predict(dnn_input)
         else:  # rvsm
             relevancy_list = np.array(dnn_input).ravel()
 
+        # Find rank of first correct file
+        correct_files = br2files_dict[bug_id]
+        found_rank = float('inf')
+        
+        for i, file in enumerate(corresponding_files):
+            if str(file) in correct_files:
+                found_rank = i + 1  # Convert to 1-based indexing
+                break
+                
+        if found_rank != float('inf'):
+            ranks.append(found_rank)
+
         # Top-1, top-2 ... top-20 accuracy
         for i in range(1, 21):
-            #i = min(i, len(relevancy_list))  # Giới hạn k trong khoảng hợp lệ
             max_indices = np.argpartition(relevancy_list, -i)[-i:]
             for corresponding_file in np.array(corresponding_files)[max_indices]:
                 if str(corresponding_file) in br2files_dict[bug_id]:
@@ -408,7 +428,39 @@ def topk_accuarcy(test_bug_reports, sample_dict, br2files_dict, clf=None):
         acc = counter / (len(test_bug_reports) - negative_total)
         acc_dict[i + 1] = round(acc, 3)
 
+    # Calculate MRR and MAP for k=20
+    accuracy, mrr, map_score = mrr_map(ranks, 20)
+    acc_dict['mrr'] = round(mrr, 3)
+    acc_dict['map'] = round(map_score, 3)
+
     return acc_dict
+
+
+def mrr_map(ranks, k):
+    """ Calculates top-k accuracy, MRR and MAP
+
+    Arguments:
+        ranks {list} -- list of ranks
+        k {integer} -- k for top-k accuracy
+    """
+    top_k = 0
+    mrr_sum = 0
+    map_sum = 0
+    total_reports = len(ranks)
+
+    for rank in ranks:
+        if rank <= k:
+            top_k += 1
+            # Calculate MRR
+            mrr_sum += 1.0 / rank
+            # Calculate MAP
+            map_sum += 1.0 / rank
+
+    accuracy = top_k / total_reports
+    mrr = mrr_sum / total_reports
+    map_score = map_sum / total_reports
+
+    return accuracy, mrr, map_score
 
 
 class CodeTimer:

@@ -9,7 +9,7 @@ from util import *
 from joblib import Parallel, delayed, cpu_count
 import csv
 import os
-from datasets import DATASETs, DATASET
+from datasets import DATASET
 
 def extract(i, br, bug_reports, java_src_dict):
     """ Extracts features for 50 wrong(randomly chosen) files for each
@@ -35,13 +35,14 @@ def extract(i, br, bug_reports, java_src_dict):
 
         try:
             # Source code of the java file
-            src = java_src_dict[java_file]
+            src_line = java_src_dict[java_file]
 
             # rVSM Text Similarity
-            rvsm = cosine_sim(br_raw_text, src)
+            src_text = ' '.join(src_line.all_content["stemmed"])
+            rvsm = cosine_sim(br_raw_text, src_text)
 
             # Class Name Similarity
-            cns = class_name_similarity(br_raw_text, src)
+            cns = class_name_similarity(br_raw_text, src_line)
 
             # Previous Reports
             prev_reports = previous_reports(java_file, br_date, bug_reports)
@@ -62,28 +63,20 @@ def extract(i, br, bug_reports, java_src_dict):
             ):
                 features.append([br_id, java_file, rvsm, cfs, cns, bfr, bff, 0])
         except Exception as e:
+            print("Error: ", e)
             pass
 
 
     return features
 
 
-def extract_features(repo_url, clone_folder, bug_report_text, src_code_folder, features_path):
-    """Clones the git repository and parallelizes the feature extraction process
-    """
-    # Clone git repo to a local folder
-    git_clone(
-        repo_url=repo_url,
-        clone_folder=clone_folder,
-    )
-
+def extract_features(bug_report_csv, src_pickle, features_path):
     # Read bug reports from tab separated file
-    bug_reports = tsv2dict(bug_report_text)
+    bug_reports = csv2dict_for_br(bug_report_csv)[:10]
     print("Number of bug reports: ", len(bug_reports))
     # Read all java source files
-    java_src_dict = get_all_source_code(src_code_folder)
+    java_src_dict = pickle2dict(src_pickle)
     print("Number of java files: ", len(java_src_dict))
-    print("N_jobs: ", cpu_count() - 1)
     # Use all CPUs except one to speed up extraction and avoid computer lagging
     batches = Parallel(n_jobs=cpu_count() - 1)(
         delayed(extract)(i, br, bug_reports, java_src_dict)
@@ -116,14 +109,8 @@ def extract_features(repo_url, clone_folder, bug_report_text, src_code_folder, f
 # Keep time while extracting features
 with CodeTimer("Feature extraction"):
 
-    extract_features(DATASET.repo_url,
-                 "../data/",
-                 DATASET.bug_repo,
-                 DATASET.src_code_folder,
-                 DATASET.features)
-
-# if __name__ == '__main__':
-#     git_clone(
-#         repo_url=DATASET.repo_url,
-#         clone_folder="../data/",
-#     )
+    extract_features(
+                    DATASET.bug_repo_csv,
+                    DATASET.src_pickle,
+                    DATASET.features
+                 )

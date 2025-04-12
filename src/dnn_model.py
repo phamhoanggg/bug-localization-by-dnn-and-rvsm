@@ -1,4 +1,4 @@
-from util import csv2dict, tsv2dict, helper_collections, topk_accuarcy
+from util import csv2dict, csv2dict_for_br, helper_collections, topk_accuarcy
 from sklearn.neural_network import MLPRegressor
 from joblib import Parallel, delayed, cpu_count
 from math import ceil
@@ -113,7 +113,7 @@ def train_dnn(
     return acc_dict
 
 
-def dnn_model_kfold(feature_path, text_path, k=10):
+def dnn_model_kfold(feature_path, bug_report_csv, k=10):
     """ Run kfold cross validation in parallel
     
     Keyword Arguments:
@@ -122,7 +122,7 @@ def dnn_model_kfold(feature_path, text_path, k=10):
     samples = csv2dict(feature_path)
 
     # These collections are speed up the process while calculating top-k accuracy
-    sample_dict, bug_reports, br2files_dict = helper_collections(samples, text_path)
+    sample_dict, bug_reports, br2files_dict = helper_collections(samples, bug_report_csv)
 
     np.random.shuffle(samples)
 

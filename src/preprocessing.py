@@ -4,8 +4,6 @@ import string
 
 import inflection
 import nltk
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
 
 import glob
 import javalang
@@ -14,7 +12,6 @@ from nltk.stem.porter import PorterStemmer
 import os
 from assets import java_keywords, stop_words
 import csv
-# from util import *
 from collections import OrderedDict
 from pygments.lexers import JavaLexer
 from pygments.token import Token
@@ -61,7 +58,7 @@ class Parser:
     def __init__(self, pro):
         self.name = pro.name
         self.src = pro.src
-        self.bug_repo = pro.bug_repo
+        self.bug_repo = pro.bug_repo_txt
 
     def report_parser(self):
         reader = csv.DictReader(open(self.bug_repo, "r"), delimiter="\t")
@@ -167,7 +164,7 @@ class Parser:
                 else:
                     src_id = os.path.basename(src_file)
                 src_files[src_id] = SourceFile(src, comments, class_names, attributes, method_names, variables,
-                                               [os.path.basename(src_file).split('.')[0]], package_name)
+                                               [os.path.basename(src_file).split('.')[0]], package_name, os.path.normpath(src_file))
             # print(src_files)
             # print("===========")
         return src_files
@@ -428,19 +425,85 @@ class SrcPreprocessing:
         self.remove_javakeywords()
         self.stem()
 
+def br_pickle2csv(pickleFile):
+    with open(pickleFile, 'rb') as f:
+        bug_reports = pickle.load(f)
+
+    # Prepare data for CSV
+    rows = []
+
+    for key, report in bug_reports.items():
+        rows.append({
+            'id': key,
+            'summary': report.summary,
+            'description': report.description,
+            'fixed_files': '; '.join(report.fixed_files) if report.fixed_files else '',
+            'report_time': report.report_time,
+            'pos_tagged_summary': report.pos_tagged_summary,
+            'pos_tagged_description': report.pos_tagged_description,
+            'stack_traces': report.stack_traces,
+            'stack_traces_remove': report.stack_traces_remove
+        })
+
+    # Write to CSV
+    csv_file = DATASET.bug_repo_csv
+    fieldnames = ['id', 'summary', 'description', 'fixed_files', 'report_time', 'pos_tagged_summary',
+                  'pos_tagged_description', 'stack_traces', 'stack_traces_remove']
+
+    with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"Saved {len(rows)} reports to {csv_file}!")
+
+def pickle2csv(pickleFile):
+    with open(pickleFile, 'rb') as f:
+        src_files = pickle.load(f)
+
+    # Prepare data for CSV
+    rows = []
+    for key, src in src_files.items():
+        rows.append({
+            'all_content': src.all_content,
+            'comments': src.comments,
+            'class_names': src.class_names,
+            'attributes': src.attributes,
+            'method_names': src.method_names,
+            'variables': src.variables,
+            'file_name': src.file_name,
+            'pos_tagged_comments': src.pos_tagged_comments,
+            'exact_file_name': src.exact_file_name,
+            'package_name': src.package_name,
+        })
+
+    # Write to CSV
+    csv_file = f'{DATASET.name}_src_file.csv'
+    fieldnames = ['all_content', 'comments', 'class_names', 'attributes', 'method_names', 'variables', 'file_name',
+                  'pos_tagged_comments', 'exact_file_name', 'package_name']
+
+    with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"Saved {len(rows)} src files to {csv_file}!")
+
 def main():
     parser = Parser(DATASET)
 
     src_prep = SrcPreprocessing(parser.src_parser())
     src_prep.preprocess()
-    with open(_DATASET_ROOT / 'preprocessed_src.pickle', 'wb') as file:
+    with open(DATASET.src_pickle, 'wb') as file:
         pickle.dump(src_prep.src_files, file, protocol=pickle.HIGHEST_PROTOCOL)
+
+    pickle2csv(DATASET.src_pickle)
+
+    #=====================================================================
 
     report_prep = ReportPreprocessing(parser.report_parser())
     report_prep.preprocess()
-    with open(_DATASET_ROOT / 'preprocessed_reports.pickle', 'wb') as file:
+    with open(f'{_DATASET_ROOT}/{DATASET.name}_preprocessed_reports.pickle', 'wb') as file:
         pickle.dump(report_prep.bug_reports, file,
                     protocol=pickle.HIGHEST_PROTOCOL)
-
+    br_pickle2csv(f'{_DATASET_ROOT}/{DATASET.name}_preprocessed_reports.pickle')
 if __name__ == '__main__':
     main()
