@@ -52,8 +52,16 @@ tomcat = Dataset(
     _DATASET_ROOT / 'features_tomcat.csv/'
 )
 
+birt = Dataset(
+    'birt',
+    _DATASET_ROOT / 'birt-20140211-1400/',
+    _DATASET_ROOT / 'Birt.txt',
+    './birt_bug_reports.csv',
+    _DATASET_ROOT / 'birt_src.pickle',
+    _DATASET_ROOT / 'features_birt.csv'
+)
+
 
 ### Current dataset in use. (change this name to change the dataset)
 DATASET = tomcat
-# if __name__ == '__main__':
-#     print(DATASETs.name, DATASETs.src, DATASET.bug_repo)
+
