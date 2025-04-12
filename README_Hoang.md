@@ -20,10 +20,7 @@ Sau khi chạy xong, sẽ thu được các file kết quả:
 | `data/preprocessed_reports.pickle` | File pickle chứa bug reports sau tiền xử lý.              |
 | `data/src.pickle`                  | File pickle chứa toàn bộ source code Java sau tiền xử lý. |
 | `src/bug_report.csv`               | File CSV chuyển từ `preprocessed_reports.pickle`.         |
-| `src/src_file.csv`                 | File CSV chuyển từ `src.pickle` (chỉ để tham khảo,        |
-
-| **không sử dụng**). |
-| ------------------- |
+| `src/src_file.csv`                 | File CSV chuyển từ `src.pickle` (chỉ để tham khảo, không sử dụng)       |
 
 ---
 
@@ -50,7 +47,7 @@ Sau khi chạy xong, sẽ thu được các file kết quả:
 
 ### Bước 7: Chạy toàn bộ dữ liệu
 
-- Nếu kết quả thử nghiệm ổn, hãy **xóa **`` trong dòng:
+- Nếu kết quả thử nghiệm ổn, hãy xóa "[:10]" trong dòng:
   ```python
   bug_reports = csv2dict_for_br(bug_report_csv)[:10]
   ```
