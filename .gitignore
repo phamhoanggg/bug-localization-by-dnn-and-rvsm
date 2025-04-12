@@ -15,3 +15,5 @@ src/__pycache__/
 
 # Subdirectories of data folder
 data/*/*
+
+.venv
